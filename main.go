@@ -21,6 +21,7 @@ func main() {
 	h.GET("/summary", handlers.GetMeetingSummary)
 	h.GET("/mermaid", handlers.GetMeetingMermaid)
 	h.GET("/chat", handlers.HandleChat)
+	h.GET("/roleplay", handlers.HandleRolePlayChat)
 
 	// 注册待办事项API路由
 	h.POST("/todo", handlers.CreateTodo)       // 创建待办事项

@@ -32,6 +32,12 @@ type ChatMessage struct {
 	Data string `json:"data"`
 }
 
+// RolePlayMessage 表示角色扮演聊天消息
+type RolePlayMessage struct {
+	Data            string `json:"data"`             // 会议内容数据
+	ParticipantName string `json:"participant_name"` // 参会人姓名
+}
+
 func Of[T any](v T) *T {
 	return &v
 }
@@ -310,4 +316,96 @@ flowchart TD
 
 	// 如果没有找到合适的格式，则返回完整内容
 	return content, nil
+}
+
+// ProcessRolePlay 处理角色扮演聊天并返回流式响应
+func (r RolePlayMessage) ProcessRolePlay(query string, stream *sse.Stream) error {
+	// 从配置文件中获取API密钥和模型名称
+	arkAPIKey, err := GetARKAPIKey()
+	if err != nil {
+		fmt.Printf("获取API密钥失败: %v", err)
+		event := &sse.Event{
+			Data: []byte(fmt.Sprintf(`{"data":"%s"}`, "错误: 获取API密钥失败")),
+		}
+		return stream.Publish(event)
+	}
+
+	arkModelName, err := GetARKModelName()
+	if err != nil {
+		fmt.Printf("获取模型名称失败: %v", err)
+		event := &sse.Event{
+			Data: []byte(fmt.Sprintf(`{"data":"%s"}`, "错误: 获取模型名称失败")),
+		}
+		return stream.Publish(event)
+	}
+
+	ctx := context.Background()
+	arkModel, err := ark.NewChatModel(ctx, &ark.ChatModelConfig{
+		APIKey:      arkAPIKey,
+		Model:       arkModelName,
+		Temperature: Of(float32(0.7)), // 增加一点创造性，使角色扮演更生动
+	})
+	if err != nil {
+		fmt.Printf("failed to create chat model: %v", err)
+		event := &sse.Event{
+			Data: []byte(fmt.Sprintf(`{"data":"%s"}`, "错误: 创建聊天模型失败")),
+		}
+		return stream.Publish(event)
+	}
+
+	// 拼接角色扮演提示
+	prompt := fmt.Sprintf(`
+会议内容: 
+%s
+
+你现在扮演的角色是会议中的参会者"%s"。你需要以这个人的身份、语气、知识背景、态度和说话方式来回答问题。
+根据会议记录中这个人的言论和表现来模仿他/她的回答风格。如果会议内容中没有足够的信息来确定这个人的某些观点，
+你可以基于这个人在会议中表现出的性格特点来合理推测，但要保持一致性。
+
+用户将以对话形式向你提问，你要始终保持角色扮演，不要暴露你是AI的事实。回答要简洁自然，符合真实对话的风格。
+
+用户问题: %s
+`, r.Data, r.ParticipantName, query)
+
+	// 准备消息
+	messages := []*schema.Message{
+		schema.SystemMessage("你正在进行角色扮演，扮演会议参会者。请完全沉浸在角色中，使用第一人称回答问题，仿佛你就是那个人。"),
+		schema.UserMessage(prompt),
+	}
+
+	// 使用流式生成回答
+	reader, err := arkModel.Stream(ctx, messages)
+	if err != nil {
+		fmt.Printf("failed to generate streaming response: %v", err)
+		event := &sse.Event{
+			Data: []byte(fmt.Sprintf(`{"data":"%s"}`, "错误: 生成流式回答失败")),
+		}
+		return stream.Publish(event)
+	}
+	defer reader.Close()
+
+	// 处理流式响应
+	var fullResponse strings.Builder
+	for {
+		chunk, err := reader.Recv()
+		if err != nil {
+			// 流结束或发生错误
+			break
+		}
+
+		fullResponse.WriteString(chunk.Content)
+
+		// 将每个块作为SSE事件发送
+		jsonResponse := fmt.Sprintf(`{"data":%q, "role":"%s"}`, chunk.Content, r.ParticipantName)
+		event := &sse.Event{
+			Data: []byte(jsonResponse),
+		}
+
+		if err := stream.Publish(event); err != nil {
+			fmt.Printf("发送SSE事件失败: %v", err)
+			return err
+		}
+	}
+
+	return nil
 }

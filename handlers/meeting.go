@@ -464,3 +464,134 @@ func GetMeetingMermaid(ctx context.Context, c *app.RequestContext) {
 
 	c.JSON(consts.StatusOK, response)
 }
+
+// HandleRolePlayChat 处理角色扮演聊天会话
+func HandleRolePlayChat(ctx context.Context, c *app.RequestContext) {
+	meetingID := c.Query("meeting_id")
+	sessionID := c.Query("session_id")
+	message := c.Query("message")
+	participantName := c.Query("participant")
+
+	if meetingID == "" || sessionID == "" {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "meeting_id and session_id are required"})
+		return
+	}
+
+	if message == "" {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "message is required"})
+		return
+	}
+
+	if participantName == "" {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "participant is required"})
+		return
+	}
+
+	fmt.Printf("角色扮演聊天: meetingID: %s, sessionID: %s, participant: %s, message: %s\n",
+		meetingID, sessionID, participantName, message)
+
+	// 读取对应会议文件内容
+	storageDir := "./storage/meetings"
+	filePath := filepath.Join(storageDir, meetingID+".json")
+
+	// 检查文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		c.JSON(consts.StatusNotFound, utils.H{"error": "会议不存在"})
+		return
+	}
+
+	// 读取会议文件
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": "无法读取会议信息"})
+		return
+	}
+
+	// 解析JSON内容
+	var meetingData map[string]interface{}
+	if err := json.Unmarshal(data, &meetingData); err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": "无法解析会议数据"})
+		return
+	}
+
+	// 提取会议内容
+	var meetingContent string
+
+	// 尝试从新格式中获取原始内容
+	if rawContent, ok := meetingData["raw_content"].(string); ok {
+		meetingContent = rawContent
+	} else {
+		// 尝试获取content字段
+		if content, ok := meetingData["content"].(string); ok {
+			meetingContent = content
+		} else {
+			// 如果没有找到适合的字段，将整个JSON作为内容
+			contentBytes, _ := json.MarshalIndent(meetingData, "", "  ")
+			meetingContent = string(contentBytes)
+		}
+	}
+
+	// 提取会议元数据
+	meetingInfo := "会议信息:\n"
+
+	// 尝试从新格式中获取元数据
+	if metadata, ok := meetingData["metadata"].(map[string]interface{}); ok {
+		// 添加标题
+		if title, ok := metadata["title"].(string); ok && title != "" {
+			meetingInfo += "标题: " + title + "\n"
+		}
+
+		// 添加描述
+		if description, ok := metadata["description"].(string); ok && description != "" {
+			meetingInfo += "描述: " + description + "\n"
+		}
+
+		// 添加参会人员
+		if participants, ok := metadata["participants"].([]interface{}); ok && len(participants) > 0 {
+			meetingInfo += "参会人员: "
+			for i, p := range participants {
+				if i > 0 {
+					meetingInfo += ", "
+				}
+				if pStr, ok := p.(string); ok {
+					meetingInfo += pStr
+				}
+			}
+			meetingInfo += "\n"
+		}
+
+		// 添加时间信息
+		if startTime, ok := metadata["start_time"].(string); ok && startTime != "" {
+			meetingInfo += "开始时间: " + startTime + "\n"
+		}
+		if endTime, ok := metadata["end_time"].(string); ok && endTime != "" {
+			meetingInfo += "结束时间: " + endTime + "\n"
+		}
+
+		// 添加摘要
+		if summary, ok := metadata["summary"].(string); ok && summary != "" {
+			meetingInfo += "摘要: " + summary + "\n"
+		}
+	}
+
+	// 合并会议信息和内容
+	msg := meetingInfo + "\n会议内容:\n" + meetingContent
+
+	// Set SSE headers
+	c.Response.Header.Set("Content-Type", "text/event-stream")
+	c.Response.Header.Set("Cache-Control", "no-cache")
+	c.Response.Header.Set("Connection", "keep-alive")
+
+	// Create SSE stream
+	stream := sse.NewStream(c)
+
+	// 使用会议信息和用户消息调用RolePlayMessage.ProcessRolePlay进行流式处理
+	rolePlayMsg := models.RolePlayMessage{
+		Data:            msg,
+		ParticipantName: participantName,
+	}
+	if err := rolePlayMsg.ProcessRolePlay(message, stream); err != nil {
+		c.AbortWithStatus(consts.StatusInternalServerError)
+		return
+	}
+}
