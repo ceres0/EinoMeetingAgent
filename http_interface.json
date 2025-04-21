@@ -3,32 +3,51 @@
   "info": {
     "title": "Meeting API",
     "version": "1.0.0",
-    "description": "API for managing meetings and chat interactions"
+    "description": "用于管理会议和聊天交互的 API"
   },
   "paths": {
     "/meeting": {
       "post": {
-        "summary": "Create a new meeting",
+        "summary": "创建一个新会议",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "会议标题"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "会议描述"
+                  },
+                  "participants": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "参会者列表"
+                  }
+                },
+                "required": ["title"]
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Meeting created successfully",
+            "description": "会议创建成功",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "id": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "会议 ID，格式为 meeting_YYYYMMDDHHMMSS"
                     }
                   },
                   "required": ["id"]
@@ -39,10 +58,10 @@
         }
       },
       "get": {
-        "summary": "Get all meetings",
+        "summary": "获取所有会议",
         "responses": {
           "200": {
-            "description": "List of meetings",
+            "description": "会议列表",
             "content": {
               "application/json": {
                 "schema": {
@@ -54,10 +73,12 @@
                         "type": "object",
                         "properties": {
                           "id": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "会议 ID"
                           },
                           "content": {
-                            "type": "object"
+                            "type": "object",
+                            "description": "会议内容"
                           }
                         },
                         "required": ["id", "content"]
@@ -74,7 +95,7 @@
     },
     "/summary": {
       "get": {
-        "summary": "Get meeting summary",
+        "summary": "获取会议摘要",
         "parameters": [
           {
             "name": "meeting_id",
@@ -82,16 +103,98 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会议 ID"
           }
         ],
         "responses": {
           "200": {
-            "description": "Meeting summary",
+            "description": "会议摘要",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "summary": {
+                      "type": "string",
+                      "description": "会议摘要内容"
+                    }
+                  },
+                  "required": ["summary"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mermaid": {
+      "get": {
+        "summary": "获取会议 Mermaid 图表",
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会议 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "会议 Mermaid 图表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mermaid": {
+                      "type": "string",
+                      "description": "Mermaid 图表代码"
+                    }
+                  },
+                  "required": ["mermaid"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/score": {
+      "get": {
+        "summary": "获取会议评分",
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会议 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "会议评分",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "score": {
+                      "type": "integer",
+                      "description": "评分（0-100）"
+                    },
+                    "comment": {
+                      "type": "string",
+                      "description": "评价意见"
+                    }
+                  },
+                  "required": ["score"]
                 }
               }
             }
@@ -101,6 +204,7 @@
     },
     "/chat": {
       "get": {
+        "summary": "实时聊天",
         "parameters": [
           {
             "name": "meeting_id",
@@ -108,7 +212,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "会议 ID"
           },
           {
             "name": "session_id",
@@ -116,7 +221,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "聊天会话 ID"
           },
           {
             "name": "message",
@@ -124,21 +230,533 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "发送的消息"
           }
         ],
         "responses": {
           "200": {
-            "description": "Chat session stream",
+            "description": "聊天会话流",
             "content": {
               "text/event-stream": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object"
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                          "description": "聊天消息内容"
+                        },
+                        "timestamp": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "消息时间戳"
+                        },
+                        "sender": {
+                          "type": "string",
+                          "description": "发送者"
+                        }
+                      }
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/roleplay": {
+      "get": {
+        "summary": "角色扮演聊天",
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会议 ID"
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "聊天会话 ID"
+          },
+          {
+            "name": "participant",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "扮演的参会者角色"
+          },
+          {
+            "name": "message",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "发送的消息"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "角色扮演聊天会话流",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                          "description": "角色扮演消息内容"
+                        },
+                        "timestamp": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "消息时间戳"
+                        },
+                        "sender": {
+                          "type": "string",
+                          "description": "发送者角色"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/multi-roleplay": {
+      "post": {
+        "summary": "多角色扮演会议",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "meeting_id": {
+                    "type": "string",
+                    "description": "会议 ID"
+                  },
+                  "host": {
+                    "type": "string",
+                    "description": "主持人姓名"
+                  },
+                  "specialists": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "专家角色列表"
+                  },
+                  "rounds": {
+                    "type": "integer",
+                    "description": "对话轮数"
+                  },
+                  "topic": {
+                    "type": "string",
+                    "description": "讨论主题"
+                  }
+                },
+                "required": ["meeting_id", "host", "specialists", "topic"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "多角色扮演会议结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "会议 ID"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "role": {
+                            "type": "string",
+                            "description": "角色"
+                          },
+                          "content": {
+                            "type": "string",
+                            "description": "消息内容"
+                          },
+                          "timestamp": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "消息时间戳"
+                          }
+                        }
+                      },
+                      "description": "对话消息列表"
+                    },
+                    "summary": {
+                      "type": "string",
+                      "description": "会议摘要"
+                    }
+                  },
+                  "required": ["id", "messages"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/todo": {
+      "post": {
+        "summary": "创建待办事项",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "待办事项标题"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "待办事项描述"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "待办事项状态，例如 '未开始'、'进行中'、'已完成'",
+                    "enum": ["未开始", "进行中", "已完成"]
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "description": "优先级，数值越小优先级越高",
+                    "minimum": 1
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "截止日期"
+                  },
+                  "meeting_id": {
+                    "type": "string",
+                    "description": "关联的会议 ID"
+                  },
+                  "assigned_to": {
+                    "type": "string",
+                    "description": "负责人姓名"
+                  }
+                },
+                "required": ["title"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "待办事项创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "description": "待办事项 ID"
+                    },
+                    "title": {
+                      "type": "string",
+                      "description": "待办事项标题"
+                    },
+                    "status": {
+                      "type": "string",
+                      "description": "待办事项状态"
+                    }
+                  },
+                  "required": ["id", "title", "status"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "获取待办事项列表",
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "筛选指定会议的待办事项"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["未开始", "进行中", "已完成"]
+            },
+            "description": "筛选特定状态的待办事项"
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "筛选特定优先级的待办事项"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "待办事项列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "todos": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer",
+                            "description": "待办事项 ID"
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "待办事项标题"
+                          },
+                          "description": {
+                            "type": "string",
+                            "description": "待办事项描述"
+                          },
+                          "status": {
+                            "type": "string",
+                            "description": "待办事项状态"
+                          },
+                          "priority": {
+                            "type": "integer",
+                            "description": "优先级"
+                          },
+                          "due_date": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "截止日期"
+                          },
+                          "meeting_id": {
+                            "type": "string",
+                            "description": "关联的会议 ID"
+                          },
+                          "assigned_to": {
+                            "type": "string",
+                            "description": "负责人姓名"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "创建时间"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": ["todos"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/todo/{id}": {
+      "put": {
+        "summary": "更新待办事项",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "待办事项 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "待办事项标题"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "待办事项描述"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["未开始", "进行中", "已完成"],
+                    "description": "待办事项状态"
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "description": "优先级"
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "截止日期"
+                  },
+                  "assigned_to": {
+                    "type": "string",
+                    "description": "负责人姓名"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "待办事项更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "description": "待办事项 ID"
+                    },
+                    "title": {
+                      "type": "string",
+                      "description": "待办事项标题"
+                    },
+                    "status": {
+                      "type": "string",
+                      "description": "待办事项状态"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "更新时间"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "删除待办事项",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "待办事项 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "待办事项删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "操作是否成功"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "操作结果消息"
+                    }
+                  },
+                  "required": ["success"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/push-report": {
+      "get": {
+        "summary": "推送会议报告到飞书",
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "会议 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "报告推送成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "操作是否成功"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "操作结果消息"
+                    },
+                    "meeting_id": {
+                      "type": "string",
+                      "description": "会议 ID"
+                    }
+                  },
+                  "required": ["success"]
                 }
               }
             }

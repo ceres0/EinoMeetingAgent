@@ -1,0 +1,290 @@
+{
+	"info": {
+		"_postman_id": "54680d28-80fe-42c9-ba5b-fe5d6fd15525",
+		"name": "CloseAI",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "12320517"
+	},
+	"item": [
+		{
+			"name": "listmeeting",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": "http://localhost:8888/meeting"
+			},
+			"response": []
+		},
+		{
+			"name": "chat meeting",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8888/chat?meeting_id=meeting_20250421112041&session_id=session_1745210662862&message=本次会议有哪些任务",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"chat"
+					],
+					"query": [
+						{
+							"key": "meeting_id",
+							"value": "meeting_20250421112041"
+						},
+						{
+							"key": "session_id",
+							"value": "session_1745210662862"
+						},
+						{
+							"key": "message",
+							"value": "本次会议有哪些任务"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "查todo表",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8888/todo?meeting_id=meeting123&status=未开始&priority=1",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"todo"
+					],
+					"query": [
+						{
+							"key": "meeting_id",
+							"value": "meeting123"
+						},
+						{
+							"key": "status",
+							"value": "未开始"
+						},
+						{
+							"key": "priority",
+							"value": "1"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "新增todo",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"title\": \"准备演示文稿\",\r\n    \"description\": \"为下周的演讲准备幻灯片\",\r\n    \"status\": \"未开始\",\r\n    \"priority\": 1,\r\n    \"due_date\": \"2023-05-10T14:00:00Z\",\r\n    \"meeting_id\": \"meeting123\",\r\n    \"assigned_to\": \"果松\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8888/todo"
+			},
+			"response": []
+		},
+		{
+			"name": "更新todo",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"status\": \"进行中\",\r\n    \"priority\": 2\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8888/todo/21"
+			},
+			"response": []
+		},
+		{
+			"name": "删todo",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "DELETE",
+				"header": [],
+				"url": "http://localhost:8888/todo/3"
+			},
+			"response": []
+		},
+		{
+			"name": "会议流程图",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8888/mermaid?meeting_id=meeting_20250421112041",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"mermaid"
+					],
+					"query": [
+						{
+							"key": "meeting_id",
+							"value": "meeting_20250421112041"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "roleplay",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8888/roleplay?meeting_id=meeting_20250421135423&session_id=session_1745210662862&participant=李泽煊&message=你在会议中提出了什么问题?",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"roleplay"
+					],
+					"query": [
+						{
+							"key": "meeting_id",
+							"value": "meeting_20250421135423"
+						},
+						{
+							"key": "session_id",
+							"value": "session_1745210662862"
+						},
+						{
+							"key": "participant",
+							"value": "李泽煊"
+						},
+						{
+							"key": "message",
+							"value": "你在会议中提出了什么问题?"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "会议评分",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8888/score?meeting_id=meeting_20250421153445",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"score"
+					],
+					"query": [
+						{
+							"key": "meeting_id",
+							"value": "meeting_20250421153445"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "飞书报告",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8888/push-report?meeting_id=meeting_20250421112041",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8888",
+					"path": [
+						"push-report"
+					],
+					"query": [
+						{
+							"key": "meeting_id",
+							"value": "meeting_20250421112041"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "multi-roleplay",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"meeting_id\": \"meeting_20250421153445\",\r\n    \"host\": \"江峰\",\r\n    \"specialists\": [\r\n        \"汪国庆\",\r\n        \"施宇轩\",\r\n        \"王启祥\"\r\n    ],\r\n    \"rounds\": 3,\r\n    \"topic\": \"研究生怎么活得更精彩？\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8888/multi-roleplay"
+			},
+			"response": []
+		}
+	]
+}
