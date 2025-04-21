@@ -21,6 +21,12 @@ func main() {
 	h.GET("/summary", handlers.GetMeetingSummary)
 	h.GET("/chat", handlers.HandleChat)
 
+	// 注册待办事项API路由
+	h.POST("/todo", handlers.CreateTodo)       // 创建待办事项
+	h.GET("/todo", handlers.GetTodoList)       // 获取待办事项列表
+	h.PUT("/todo/:id", handlers.UpdateTodo)    // 更新待办事项
+	h.DELETE("/todo/:id", handlers.DeleteTodo) // 删除待办事项
+
 	// Serve static files
 	h.StaticFS("/", &app.FS{
 		Root:               "./static",
