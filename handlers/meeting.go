@@ -399,3 +399,68 @@ func HandleChat(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 }
+
+// GetMeetingMermaid 处理获取会议流程图的请求
+func GetMeetingMermaid(ctx context.Context, c *app.RequestContext) {
+	meetingID := c.Query("meeting_id")
+	if meetingID == "" {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "meeting_id is required"})
+		return
+	}
+	fmt.Printf("处理会议流程图请求，meetingID: %s\n", meetingID)
+
+	// 读取对应会议文件内容
+	storageDir := "./storage/meetings"
+	filePath := filepath.Join(storageDir, meetingID+".json")
+
+	// 检查文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		c.JSON(consts.StatusNotFound, utils.H{"error": "会议不存在"})
+		return
+	}
+
+	// 读取会议文件
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": "无法读取会议信息"})
+		return
+	}
+
+	// 解析JSON内容
+	var meetingData map[string]interface{}
+	if err := json.Unmarshal(data, &meetingData); err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": "无法解析会议数据"})
+		return
+	}
+
+	// 提取会议内容
+	var meetingContent string
+
+	// 尝试从新格式中获取原始内容
+	if rawContent, ok := meetingData["raw_content"].(string); ok {
+		meetingContent = rawContent
+	} else {
+		// 尝试获取content字段
+		if content, ok := meetingData["content"].(string); ok {
+			meetingContent = content
+		} else {
+			// 如果没有找到适合的字段，将整个JSON作为内容
+			contentBytes, _ := json.MarshalIndent(meetingData, "", "  ")
+			meetingContent = string(contentBytes)
+		}
+	}
+
+	// 调用ExtractMermaid生成流程图
+	mermaidCode, err := models.ExtractMermaid(ctx, meetingContent)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": "生成流程图失败: " + err.Error()})
+		return
+	}
+
+	// 构建响应
+	response := map[string]interface{}{
+		"mermaid_code": mermaidCode,
+	}
+
+	c.JSON(consts.StatusOK, response)
+}

@@ -241,3 +241,73 @@ func ExtractMeetingInfo(ctx context.Context, documentText string) (map[string]in
 
 	return meetingInfo, nil
 }
+
+// ExtractMermaid 使用LLM从会议文本中总结出会议流程并输出对应的mermaid代码
+func ExtractMermaid(ctx context.Context, documentText string) (string, error) {
+	// 从配置文件中获取API密钥和模型名称
+	arkAPIKey, err := GetARKAPIKey()
+	if err != nil {
+		return "", fmt.Errorf("获取API密钥失败: %v", err)
+	}
+
+	arkModelName, err := GetARKModelName()
+	if err != nil {
+		return "", fmt.Errorf("获取模型名称失败: %v", err)
+	}
+
+	arkModel, err := ark.NewChatModel(ctx, &ark.ChatModelConfig{
+		APIKey:      arkAPIKey,
+		Model:       arkModelName,
+		Temperature: Of(float32(0.7)), // 稍微提高创造性
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("创建LLM客户端失败: %v", err)
+	}
+
+	// 准备系统提示和用户提示
+	systemPrompt := `你是一个专业的会议流程分析专家，精通mermaid流程图语法。请从会议文本中提取主要流程和决策过程：
+1. 分析会议中讨论的主要流程、决策过程或任务安排
+2. 使用mermaid流程图语法创建一个清晰的流程图
+3. 流程图应该包含主要步骤、决策点和责任人（如果有）
+4. 保持图表简洁但信息丰富，通常不超过10个节点
+5. 必须使用合法有效的mermaid语法
+
+请直接返回完整的mermaid代码块，格式如下：
+'''mermaid
+flowchart TD
+    A[开始] --> B[步骤1]
+    B --> C{决策点}
+    C -->|是| D[步骤2]
+    C -->|否| E[步骤3]
+    ...
+'''
+
+除了上述mermaid代码块外，请勿输出任何其他内容。`
+
+	// 准备消息
+	messages := []*schema.Message{
+		schema.SystemMessage(systemPrompt),
+		schema.UserMessage(documentText),
+	}
+
+	// 生成回答
+	response, err := arkModel.Generate(ctx, messages)
+	if err != nil {
+		return "", fmt.Errorf("生成流程图失败: %v", err)
+	}
+
+	// 提取mermaid代码块内容
+	content := response.Content
+	mermaidStart := strings.Index(content, "'''mermaid")
+	mermaidEnd := strings.LastIndex(content, "'''")
+
+	if mermaidStart >= 0 && mermaidEnd > mermaidStart {
+		// 提取mermaid代码，包括'''mermaid和结束的'''
+		mermaidCode := content[mermaidStart : mermaidEnd+3]
+		return mermaidCode, nil
+	}
+
+	// 如果没有找到合适的格式，则返回完整内容
+	return content, nil
+}

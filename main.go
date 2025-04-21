@@ -19,6 +19,7 @@ func main() {
 	h.POST("/meeting", handlers.CreateMeeting)
 	h.GET("/meeting", handlers.ListMeetings)
 	h.GET("/summary", handlers.GetMeetingSummary)
+	h.GET("/mermaid", handlers.GetMeetingMermaid)
 	h.GET("/chat", handlers.HandleChat)
 
 	// 注册待办事项API路由
