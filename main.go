@@ -25,6 +25,10 @@ func main() {
 	h.GET("/roleplay", handlers.HandleRolePlayChat)
 	h.GET("/push-report", handlers.PushMeetingReport)
 
+	// 注册多角色扮演会议API路由
+	h.POST("/multi-roleplay", handlers.HandleMultiRoleplayMeeting)              // 同步接口
+	h.POST("/multi-roleplay/stream", handlers.HandleStreamMultiRoleplayMeeting) // 流式接口
+
 	// 注册待办事项API路由
 	h.POST("/todo", handlers.CreateTodo)       // 创建待办事项
 	h.GET("/todo", handlers.GetTodoList)       // 获取待办事项列表

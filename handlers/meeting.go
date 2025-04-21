@@ -717,3 +717,87 @@ func PushMeetingReport(ctx context.Context, c *app.RequestContext) {
 		"message": "会议报告已成功推送到飞书",
 	})
 }
+
+// HandleMultiRoleplayMeeting 处理多角色扮演会议请求
+func HandleMultiRoleplayMeeting(ctx context.Context, c *app.RequestContext) {
+	// 获取请求参数
+	var reqBody models.MultiRoleplayRequest
+	if err := c.BindJSON(&reqBody); err != nil {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "无效的请求体: " + err.Error()})
+		return
+	}
+
+	// 参数验证
+	if reqBody.MeetingID == "" {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "meeting_id 是必需的"})
+		return
+	}
+
+	if reqBody.Host == "" {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "host 是必需的"})
+		return
+	}
+
+	if len(reqBody.Specialists) == 0 {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "至少需要一名专家参与者"})
+		return
+	}
+
+	if reqBody.Rounds <= 0 {
+		reqBody.Rounds = 3 // 默认进行3轮讨论
+	}
+
+	// 执行多角色扮演会议
+	response, err := models.PerformMultiRoleplayMeeting(&reqBody)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": "执行多角色扮演会议失败: " + err.Error()})
+		return
+	}
+
+	// 返回结果
+	c.JSON(consts.StatusOK, response)
+}
+
+// HandleStreamMultiRoleplayMeeting 处理流式多角色扮演会议请求
+func HandleStreamMultiRoleplayMeeting(ctx context.Context, c *app.RequestContext) {
+	// 获取请求参数
+	var reqBody models.MultiRoleplayRequest
+	if err := c.BindJSON(&reqBody); err != nil {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "无效的请求体: " + err.Error()})
+		return
+	}
+
+	// 参数验证
+	if reqBody.MeetingID == "" {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "meeting_id 是必需的"})
+		return
+	}
+
+	if reqBody.Host == "" {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "host 是必需的"})
+		return
+	}
+
+	if len(reqBody.Specialists) == 0 {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "至少需要一名专家参与者"})
+		return
+	}
+
+	if reqBody.Rounds <= 0 {
+		reqBody.Rounds = 3 // 默认进行3轮讨论
+	}
+
+	// 设置SSE响应头
+	c.Response.Header.Set("Content-Type", "text/event-stream")
+	c.Response.Header.Set("Cache-Control", "no-cache")
+	c.Response.Header.Set("Connection", "keep-alive")
+
+	// 创建SSE流
+	stream := sse.NewStream(c)
+
+	// 流式执行多角色扮演会议
+	if err := models.StreamMultiRoleplayMeeting(ctx, &reqBody, stream); err != nil {
+		c.AbortWithStatus(consts.StatusInternalServerError)
+		return
+	}
+}
