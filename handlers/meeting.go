@@ -178,14 +178,49 @@ func GetMeetingSummary(ctx context.Context, c *app.RequestContext) {
 	}
 	fmt.Printf("meetingID: %s\n", meetingID)
 
-	// TODO: Implement actual summary retrieval logic
-	response := map[string]interface{}{
-		"content": `
-		Meeting summary for ` + meetingID + `## Summary
-we talked about the project and the next steps, we will have a call next week to discuss the project in more detail.
+	// 读取对应会议文件内容
+	storageDir := "./storage/meetings"
+	filePath := filepath.Join(storageDir, meetingID+".json")
 
-......
-		`,
+	// 检查文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		c.JSON(consts.StatusNotFound, utils.H{"error": "会议不存在"})
+		return
+	}
+
+	// 读取会议文件
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": "无法读取会议信息"})
+		return
+	}
+
+	// 解析JSON内容
+	var meetingData map[string]interface{}
+	if err := json.Unmarshal(data, &meetingData); err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": "无法解析会议数据"})
+		return
+	}
+
+	// 从meetingData中提取摘要信息
+	var summary string
+
+	// 尝试从新格式中获取元数据
+	if metadata, ok := meetingData["metadata"].(map[string]interface{}); ok {
+		// 提取摘要
+		if sum, ok := metadata["summary"].(string); ok {
+			summary = sum
+		} else {
+			summary = "无摘要信息"
+		}
+	} else {
+		// 兼容旧格式，或者使用整个数据
+		summary = "无法从会议数据中提取摘要信息"
+	}
+
+	// 构建响应
+	response := map[string]interface{}{
+		"summary": summary,
 	}
 
 	c.JSON(consts.StatusOK, response)
@@ -290,6 +325,21 @@ func HandleChat(ctx context.Context, c *app.RequestContext) {
 		// 添加摘要
 		if summary, ok := metadata["summary"].(string); ok && summary != "" {
 			meetingInfo += "摘要: " + summary + "\n"
+		}
+
+		// 添加任务
+		// 添加参会人员
+		if todo_list, ok := metadata["todo_list"].([]interface{}); ok && len(todo_list) > 0 {
+			meetingInfo += "会议任务: "
+			for i, p := range todo_list {
+				if i > 0 {
+					meetingInfo += ", "
+				}
+				if pStr, ok := p.(string); ok {
+					meetingInfo += pStr
+				}
+			}
+			meetingInfo += "\n"
 		}
 	}
 

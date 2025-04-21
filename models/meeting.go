@@ -115,9 +115,10 @@ func ExtractMeetingInfo(ctx context.Context, documentText string) (map[string]in
 3. 参会人员列表(必须包含)
 4. 会议开始时间（尽可能精确到日期和时间）
 5. 会议结束时间（尽可能精确到日期和时间）
-6. 会议主要内容摘要（不超过100字）
+6. 会议主要内容摘要(不超过100字)
+7. 会议中提到的一些待办事项(必须包含)
 
-以JSON格式返回，字段包括：title, description, participants（数组）, start_time, end_time, summary。`
+以JSON格式返回,字段包括:title, description, participants(数组), start_time, end_time, summary, todo_list(数组)。`
 
 	// 准备消息
 	messages := []*schema.Message{
