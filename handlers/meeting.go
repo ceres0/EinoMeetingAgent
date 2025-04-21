@@ -390,18 +390,12 @@ func HandleChat(ctx context.Context, c *app.RequestContext) {
 	// Create SSE stream
 	stream := sse.NewStream(c)
 
-	// 使用会议信息和用户消息调用ChatMessage.Process
-	res := models.ChatMessage{
+	// 使用会议信息和用户消息调用ChatMessage.Process进行流式处理
+	chatMsg := models.ChatMessage{
 		Data: msg,
-	}.Process(message)
-
-	data = []byte(res)
-
-	event := &sse.Event{
-		Data: data,
 	}
-
-	if err := stream.Publish(event); err != nil {
+	if err := chatMsg.Process(message, stream); err != nil {
+		c.AbortWithStatus(consts.StatusInternalServerError)
 		return
 	}
 }
