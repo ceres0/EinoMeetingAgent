@@ -595,3 +595,102 @@ func HandleRolePlayChat(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 }
+
+// GetMeetingScore 处理获取会议评分的请求
+func GetMeetingScore(ctx context.Context, c *app.RequestContext) {
+	meetingID := c.Query("meeting_id")
+	if meetingID == "" {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "meeting_id is required"})
+		return
+	}
+	fmt.Printf("处理会议评分请求，meetingID: %s\n", meetingID)
+
+	// 读取对应会议文件内容
+	storageDir := "./storage/meetings"
+	filePath := filepath.Join(storageDir, meetingID+".json")
+
+	// 检查文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		c.JSON(consts.StatusNotFound, utils.H{"error": "会议不存在"})
+		return
+	}
+
+	// 读取会议文件
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": "无法读取会议信息"})
+		return
+	}
+
+	// 解析JSON内容
+	var meetingData map[string]interface{}
+	if err := json.Unmarshal(data, &meetingData); err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": "无法解析会议数据"})
+		return
+	}
+
+	// 提取会议内容
+	var meetingContent string
+
+	// 尝试从新格式中获取原始内容
+	if rawContent, ok := meetingData["raw_content"].(string); ok {
+		meetingContent = rawContent
+	} else {
+		// 尝试获取content字段
+		if content, ok := meetingData["content"].(string); ok {
+			meetingContent = content
+		} else {
+			// 如果没有找到适合的字段，将整个JSON作为内容
+			contentBytes, _ := json.MarshalIndent(meetingData, "", "  ")
+			meetingContent = string(contentBytes)
+		}
+	}
+
+	// 获取会议元数据并添加到内容中，提供更多上下文
+	meetingInfo := "会议信息:\n"
+
+	// 尝试从新格式中获取元数据
+	if metadata, ok := meetingData["metadata"].(map[string]interface{}); ok {
+		// 添加标题
+		if title, ok := metadata["title"].(string); ok && title != "" {
+			meetingInfo += "标题: " + title + "\n"
+		}
+
+		// 添加描述
+		if description, ok := metadata["description"].(string); ok && description != "" {
+			meetingInfo += "描述: " + description + "\n"
+		}
+
+		// 添加参会人员
+		if participants, ok := metadata["participants"].([]interface{}); ok && len(participants) > 0 {
+			meetingInfo += "参会人员: "
+			for i, p := range participants {
+				if i > 0 {
+					meetingInfo += ", "
+				}
+				if pStr, ok := p.(string); ok {
+					meetingInfo += pStr
+				}
+			}
+			meetingInfo += "\n"
+		}
+
+		// 添加摘要
+		if summary, ok := metadata["summary"].(string); ok && summary != "" {
+			meetingInfo += "摘要: " + summary + "\n"
+		}
+	}
+
+	// 合并会议信息和内容
+	fullContent := meetingInfo + "\n会议内容:\n" + meetingContent
+
+	// 调用EvaluateMeeting评估会议
+	meetingScore, err := models.EvaluateMeeting(ctx, fullContent)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": "评估会议失败: " + err.Error()})
+		return
+	}
+
+	// 返回评分结果
+	c.JSON(consts.StatusOK, meetingScore)
+}

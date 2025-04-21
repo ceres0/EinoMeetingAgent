@@ -20,6 +20,7 @@ func main() {
 	h.GET("/meeting", handlers.ListMeetings)
 	h.GET("/summary", handlers.GetMeetingSummary)
 	h.GET("/mermaid", handlers.GetMeetingMermaid)
+	h.GET("/score", handlers.GetMeetingScore)
 	h.GET("/chat", handlers.HandleChat)
 	h.GET("/roleplay", handlers.HandleRolePlayChat)
 

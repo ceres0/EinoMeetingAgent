@@ -38,6 +38,17 @@ type RolePlayMessage struct {
 	ParticipantName string `json:"participant_name"` // 参会人姓名
 }
 
+// MeetingScore 表示会议评分结果
+type MeetingScore struct {
+	GoalAchievement       int     `json:"goal_achievement"`       // 会议目标达成度
+	TopicFocus            int     `json:"topic_focus"`            // 主题聚焦度
+	ParticipantEngagement int     `json:"participant_engagement"` // 参与者互动与参与度
+	TotalScore            int     `json:"total_score"`            // 总分
+	MaxPossibleScore      int     `json:"max_possible_score"`     // 最大可能得分
+	ScorePercentage       float64 `json:"score_percentage"`       // 得分百分比
+	Feedback              string  `json:"feedback"`               // 评价反馈
+}
+
 func Of[T any](v T) *T {
 	return &v
 }
@@ -408,4 +419,148 @@ func (r RolePlayMessage) ProcessRolePlay(query string, stream *sse.Stream) error
 	}
 
 	return nil
+}
+
+// EvaluateMeeting 使用LLM评估会议质量
+func EvaluateMeeting(ctx context.Context, documentText string) (*MeetingScore, error) {
+	// 从配置文件中获取API密钥和模型名称
+	arkAPIKey, err := GetARKAPIKey()
+	if err != nil {
+		return nil, fmt.Errorf("获取API密钥失败: %v", err)
+	}
+
+	arkModelName, err := GetARKModelName()
+	if err != nil {
+		return nil, fmt.Errorf("获取模型名称失败: %v", err)
+	}
+
+	arkModel, err := ark.NewChatModel(ctx, &ark.ChatModelConfig{
+		APIKey:      arkAPIKey,
+		Model:       arkModelName,
+		Temperature: Of(float32(0.2)), // 低温度以获得一致的评估结果
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("创建LLM客户端失败: %v", err)
+	}
+
+	// 准备系统提示和用户提示
+	systemPrompt := `你是一个专业的会议评估专家。你需要根据以下评分规则对提供的会议文本进行全面客观的评估：
+
+核心指标一：会议目标达成度 (Meeting Goal Achievement) - 总分 /4
+4 分 (优秀): 会议完全实现了预定的目标，目标非常明确且可衡量，产出了清晰、可执行的成果和行动项，问题（如果会议目的是解决问题）得到了高效解决。
+3 分 (良好): 会议基本实现了预定的目标，目标比较明确，产出了较为具体的成果和行动项，问题（如果会议目的是解决问题）得到了较好解决。
+2 分 (一般): 会议部分实现了预定的目标，目标相对模糊，成果和行动项较为笼统，问题（如果会议目的是解决问题）得到了初步讨论，但解决程度有限。
+1 分 (较差): 会议未能有效实现预定的目标，目标不明确，缺乏有效成果和行动项，问题（如果会议目的是解决问题）未得到有效解决。
+
+核心指标二：主题聚焦度 (Topic Focus) - 总分 /4
+4 分 (优秀): 讨论完全聚焦于会议主题和议程，严格遵循议程，所有内容高度相关，时间利用非常高效，无跑题。
+3 分 (良好): 讨论基本聚焦于会议主题和议程，大部分遵循议程，内容基本相关，时间利用效率较高，偶有少量跑题但能及时拉回。
+2 分 (一般): 讨论部分偏离会议主题和议程，议程遵循度一般，部分内容关联性较弱，时间利用效率一般，跑题现象较为明显。
+1 分 (较差): 讨论严重偏离会议主题和议程，议程形同虚设，大量内容无关，时间利用效率极低，严重跑题。
+
+核心指标三：参与者互动与参与度 (Participant Engagement & Interaction) - 总分 /4
+4 分 (优秀): 绝大多数参与者都积极参与，互动频繁且深入，认真倾听并尊重他人，讨论氛围非常积极合作，充分体现集体智慧。
+3 分 (良好): 多数参与者都积极参与，互动较好，基本认真倾听并尊重他人，讨论氛围较为友好，参与度良好。
+2 分 (一般): 部分参与者参与，互动较少，倾听和尊重程度一般，讨论氛围有待改善，参与度一般，部分人沉默。
+1 分 (较差): 少数人主导，参与度极低，几乎没有互动，缺乏倾听和尊重，讨论氛围紧张或冷淡，如同单向汇报。
+
+必须严格按照以上评分标准，根据会议文本的内容和质量，为每个核心指标打分，并给出总体评价。你的评估必须客观、公正、详细，基于事实而非主观假设。
+你的回答必须包含每个指标的得分（1-4分）和详细理由，以及一个总体评价。
+
+以下是你必须返回的JSON格式（不要输出其他内容）：
+{
+  "goal_achievement": 分数,
+  "goal_achievement_feedback": "理由...",
+  "topic_focus": 分数,
+  "topic_focus_feedback": "理由...",
+  "participant_engagement": 分数,
+  "participant_engagement_feedback": "理由...",
+  "overall_feedback": "总体评价..."
+}`
+
+	// 准备消息
+	messages := []*schema.Message{
+		schema.SystemMessage(systemPrompt),
+		schema.UserMessage(documentText),
+	}
+
+	// 生成回答
+	response, err := arkModel.Generate(ctx, messages)
+	if err != nil {
+		return nil, fmt.Errorf("评估会议失败: %v", err)
+	}
+
+	// 解析评估结果
+	var evaluation map[string]interface{}
+	if err := json.Unmarshal([]byte(response.Content), &evaluation); err != nil {
+		// 如果解析失败，尝试从文本中提取JSON部分
+		jsonStartIdx := strings.Index(response.Content, "{")
+		jsonEndIdx := strings.LastIndex(response.Content, "}")
+
+		if jsonStartIdx >= 0 && jsonEndIdx > jsonStartIdx {
+			jsonText := response.Content[jsonStartIdx : jsonEndIdx+1]
+			if err := json.Unmarshal([]byte(jsonText), &evaluation); err != nil {
+				return nil, fmt.Errorf("解析评估结果失败: %v", err)
+			}
+		} else {
+			return nil, fmt.Errorf("评估结果格式错误: %v", err)
+		}
+	}
+
+	// 提取评分
+	goalAchievement, _ := evaluation["goal_achievement"].(float64)
+	topicFocus, _ := evaluation["topic_focus"].(float64)
+	participantEngagement, _ := evaluation["participant_engagement"].(float64)
+
+	// 计算总分和百分比
+	totalScore := int(goalAchievement + topicFocus + participantEngagement)
+	maxPossibleScore := 12 // 3个指标，每个最高4分
+	scorePercentage := float64(totalScore) / float64(maxPossibleScore) * 100
+
+	// 构建反馈
+	goalAchievementFeedback, _ := evaluation["goal_achievement_feedback"].(string)
+	topicFocusFeedback, _ := evaluation["topic_focus_feedback"].(string)
+	participantEngagementFeedback, _ := evaluation["participant_engagement_feedback"].(string)
+	overallFeedback, _ := evaluation["overall_feedback"].(string)
+
+	feedback := fmt.Sprintf(`## 会议评分详情
+
+### 会议目标达成度: %d/4
+%s
+
+### 主题聚焦度: %d/4
+%s
+
+### 参与者互动与参与度: %d/4
+%s
+
+### 总体评价
+%s
+
+**总分: %d/%d (%.1f%%)**
+`,
+		int(goalAchievement),
+		goalAchievementFeedback,
+		int(topicFocus),
+		topicFocusFeedback,
+		int(participantEngagement),
+		participantEngagementFeedback,
+		overallFeedback,
+		totalScore,
+		maxPossibleScore,
+		scorePercentage)
+
+	// 构建评分结果
+	meetingScore := &MeetingScore{
+		GoalAchievement:       int(goalAchievement),
+		TopicFocus:            int(topicFocus),
+		ParticipantEngagement: int(participantEngagement),
+		TotalScore:            totalScore,
+		MaxPossibleScore:      maxPossibleScore,
+		ScorePercentage:       scorePercentage,
+		Feedback:              feedback,
+	}
+
+	return meetingScore, nil
 }
