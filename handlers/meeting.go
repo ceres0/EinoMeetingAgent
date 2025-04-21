@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"meetingagent/models"
+	sqldb "meetingagent/sql"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
@@ -60,6 +61,41 @@ func CreateMeeting(ctx context.Context, c *app.RequestContext) {
 	if err != nil {
 		c.JSON(consts.StatusInternalServerError, utils.H{"error": "无法分析会议内容: " + err.Error()})
 		return
+	}
+
+	// 将会议中的待办事项添加到数据库
+	if todoList, ok := meetingInfo["todo_list"].([]interface{}); ok && len(todoList) > 0 {
+		// 提取会议标题作为任务描述前缀
+		meetingTitle := ""
+		if title, ok := meetingInfo["title"].(string); ok {
+			meetingTitle = title
+		}
+
+		// 将todo_list中的每一项添加到数据库
+		var todos []*sqldb.Todo
+		for _, item := range todoList {
+			if todoStr, ok := item.(string); ok && todoStr != "" {
+				todo := &sqldb.Todo{
+					Title:       todoStr,
+					Description: fmt.Sprintf("来自会议: %s", meetingTitle),
+					Status:      "未开始",
+					Priority:    2, // 默认中等优先级
+					MeetingID:   meetingID,
+				}
+				todos = append(todos, todo)
+			}
+		}
+
+		// 批量添加待办事项
+		if len(todos) > 0 {
+			todoDbName := "./storage/todo.db"
+			if err := sqldb.BatchAddTodos(todoDbName, todos); err != nil {
+				fmt.Printf("添加会议待办事项失败: %v\n", err)
+				// 这里我们只记录错误，不中断会议创建流程
+			} else {
+				fmt.Printf("成功添加 %d 个会议待办事项到数据库\n", len(todos))
+			}
+		}
 	}
 
 	// 构建完整的会议内容
