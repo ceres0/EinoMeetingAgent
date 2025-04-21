@@ -13,6 +13,9 @@ type Config struct {
 		APIKey    string `json:"api_key"`
 		ModelName string `json:"model_name"`
 	} `json:"ark"`
+	FeiShu struct {
+		WebhookURL string `json:"webhook_url"` // 飞书机器人的Webhook地址
+	} `json:"feishu"`
 }
 
 var (

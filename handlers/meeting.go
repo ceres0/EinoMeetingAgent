@@ -694,3 +694,26 @@ func GetMeetingScore(ctx context.Context, c *app.RequestContext) {
 	// 返回评分结果
 	c.JSON(consts.StatusOK, meetingScore)
 }
+
+// PushMeetingReport 处理推送会议报告到飞书的请求
+func PushMeetingReport(ctx context.Context, c *app.RequestContext) {
+	// 获取会议ID
+	meetingID := c.Query("meeting_id")
+	if meetingID == "" {
+		c.JSON(consts.StatusBadRequest, utils.H{"error": "meeting_id是必需的"})
+		return
+	}
+
+	fmt.Printf("推送会议报告到飞书, meetingID: %s\n", meetingID)
+
+	// 推送会议报告到飞书
+	if err := models.PushMeetingReportToFeiShu(meetingID); err != nil {
+		c.JSON(consts.StatusInternalServerError, utils.H{"error": fmt.Sprintf("推送会议报告失败: %v", err)})
+		return
+	}
+
+	// 返回成功响应
+	c.JSON(consts.StatusOK, utils.H{
+		"message": "会议报告已成功推送到飞书",
+	})
+}

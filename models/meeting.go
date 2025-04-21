@@ -1,9 +1,14 @@
 package models
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cloudwego/eino-ext/components/model/ark"
@@ -47,6 +52,73 @@ type MeetingScore struct {
 	MaxPossibleScore      int     `json:"max_possible_score"`     // 最大可能得分
 	ScorePercentage       float64 `json:"score_percentage"`       // 得分百分比
 	Feedback              string  `json:"feedback"`               // 评价反馈
+}
+
+// FeiShuWebhookConfig 飞书机器人配置
+type FeiShuWebhookConfig struct {
+	WebhookURL string `json:"webhook_url"` // 飞书机器人的Webhook地址
+}
+
+// MeetingReport 表示会议报告
+type MeetingReport struct {
+	Title        string   `json:"title"`        // 会议标题
+	Description  string   `json:"description"`  // 会议描述
+	Summary      string   `json:"summary"`      // 会议摘要
+	Participants []string `json:"participants"` // 参会人员
+	TodoList     []string `json:"todo_list"`    // 待办事项
+}
+
+// FeiShuMessage 表示飞书消息的结构
+type FeiShuMessage struct {
+	MsgType string `json:"msg_type"`
+	Card    Card   `json:"card"`
+}
+
+// Card 表示飞书卡片消息结构
+type Card struct {
+	Header   Header    `json:"header"`
+	Elements []Element `json:"elements"`
+}
+
+// Header 表示飞书卡片的标题
+type Header struct {
+	Title    Title  `json:"title"`
+	Template string `json:"template"` // blue, green, turquoise, red, orange, purple, grey
+}
+
+// Title 表示飞书卡片标题
+type Title struct {
+	Content string `json:"content"`
+	Tag     string `json:"tag"`
+}
+
+// Element 表示飞书卡片中的元素
+type Element struct {
+	Tag     string   `json:"tag"`
+	Text    *Text    `json:"text,omitempty"`
+	Fields  []Field  `json:"fields,omitempty"`
+	Actions []Action `json:"actions,omitempty"`
+}
+
+// Text 表示飞书卡片中的文本
+type Text struct {
+	Content string `json:"content"`
+	Tag     string `json:"tag"`
+}
+
+// Field 表示飞书卡片中的字段
+type Field struct {
+	IsShort bool `json:"is_short"`
+	Text    Text `json:"text"`
+}
+
+// Action 表示飞书卡片中的操作
+type Action struct {
+	Tag   string `json:"tag"`
+	Text  Text   `json:"text"`
+	URL   string `json:"url,omitempty"`
+	Type  string `json:"type,omitempty"`
+	Value string `json:"value,omitempty"`
 }
 
 func Of[T any](v T) *T {
@@ -563,4 +635,207 @@ func EvaluateMeeting(ctx context.Context, documentText string) (*MeetingScore, e
 	}
 
 	return meetingScore, nil
+}
+
+// GetFeiShuWebhookURL 从配置中获取飞书Webhook URL
+func GetFeiShuWebhookURL() (string, error) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return "", err
+	}
+
+	// 从配置中读取飞书Webhook URL
+	// 注意：需要在配置中添加feishu.webhook_url字段
+	// 这里假设配置文件已添加该字段，如果没有，需要更新Config结构和config.json
+	if cfg.FeiShu.WebhookURL == "" {
+		return "", fmt.Errorf("飞书Webhook URL未配置")
+	}
+
+	return cfg.FeiShu.WebhookURL, nil
+}
+
+// CreateMeetingReport 从会议ID创建会议报告
+func CreateMeetingReport(meetingID string) (*MeetingReport, error) {
+	// 读取对应会议文件内容
+	storageDir := "./storage/meetings"
+	filePath := filepath.Join(storageDir, meetingID+".json")
+
+	// 检查文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("会议不存在")
+	}
+
+	// 读取会议文件
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("无法读取会议信息: %v", err)
+	}
+
+	// 解析JSON内容
+	var meetingData map[string]interface{}
+	if err := json.Unmarshal(data, &meetingData); err != nil {
+		return nil, fmt.Errorf("无法解析会议数据: %v", err)
+	}
+
+	// 创建会议报告
+	report := &MeetingReport{
+		Title:        "未命名会议",
+		Description:  "",
+		Summary:      "",
+		Participants: []string{},
+		TodoList:     []string{},
+	}
+
+	// 从metadata中提取信息
+	if metadata, ok := meetingData["metadata"].(map[string]interface{}); ok {
+		// 提取标题
+		if title, ok := metadata["title"].(string); ok && title != "" {
+			report.Title = title
+		}
+
+		// 提取描述
+		if description, ok := metadata["description"].(string); ok && description != "" {
+			report.Description = description
+		}
+
+		// 提取摘要
+		if summary, ok := metadata["summary"].(string); ok && summary != "" {
+			report.Summary = summary
+		}
+
+		// 提取参会人员
+		if participants, ok := metadata["participants"].([]interface{}); ok && len(participants) > 0 {
+			for _, p := range participants {
+				if pStr, ok := p.(string); ok && pStr != "" {
+					report.Participants = append(report.Participants, pStr)
+				}
+			}
+		}
+
+		// 提取待办事项
+		if todoList, ok := metadata["todo_list"].([]interface{}); ok && len(todoList) > 0 {
+			for _, todo := range todoList {
+				if todoStr, ok := todo.(string); ok && todoStr != "" {
+					report.TodoList = append(report.TodoList, todoStr)
+				}
+			}
+		}
+	}
+
+	return report, nil
+}
+
+// SendMeetingReportToFeiShu 发送会议报告到飞书
+func SendMeetingReportToFeiShu(report *MeetingReport) error {
+	// 获取飞书Webhook URL
+	webhookURL, err := GetFeiShuWebhookURL()
+	if err != nil {
+		return fmt.Errorf("获取飞书Webhook URL失败: %v", err)
+	}
+
+	// 构建飞书消息
+	message := FeiShuMessage{
+		MsgType: "interactive",
+		Card: Card{
+			Header: Header{
+				Title: Title{
+					Content: report.Title,
+					Tag:     "plain_text",
+				},
+				Template: "blue", // 可以根据需要更改颜色
+			},
+			Elements: []Element{},
+		},
+	}
+
+	// 添加会议描述
+	if report.Description != "" {
+		message.Card.Elements = append(message.Card.Elements, Element{
+			Tag: "div",
+			Text: &Text{
+				Content: "**会议描述：**\n" + report.Description,
+				Tag:     "lark_md",
+			},
+		})
+	}
+
+	// 添加会议摘要
+	if report.Summary != "" {
+		message.Card.Elements = append(message.Card.Elements, Element{
+			Tag: "div",
+			Text: &Text{
+				Content: "**会议摘要：**\n" + report.Summary,
+				Tag:     "lark_md",
+			},
+		})
+	}
+
+	// 添加分割线
+	message.Card.Elements = append(message.Card.Elements, Element{
+		Tag: "hr",
+	})
+
+	// 添加参会人员
+	if len(report.Participants) > 0 {
+		participantsText := "**参会人员：**\n" + strings.Join(report.Participants, "、")
+		message.Card.Elements = append(message.Card.Elements, Element{
+			Tag: "div",
+			Text: &Text{
+				Content: participantsText,
+				Tag:     "lark_md",
+			},
+		})
+	}
+
+	// 添加待办事项
+	if len(report.TodoList) > 0 {
+		todoListText := "**待办事项：**\n"
+		for i, todo := range report.TodoList {
+			todoListText += fmt.Sprintf("%d. %s\n", i+1, todo)
+		}
+		message.Card.Elements = append(message.Card.Elements, Element{
+			Tag: "div",
+			Text: &Text{
+				Content: todoListText,
+				Tag:     "lark_md",
+			},
+		})
+	}
+
+	// 将消息转换为JSON
+	messageJSON, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("序列化消息失败: %v", err)
+	}
+
+	// 发送POST请求到飞书Webhook
+	resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(messageJSON))
+	if err != nil {
+		return fmt.Errorf("发送消息到飞书失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("飞书返回错误状态码: %d, 响应: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// PushMeetingReportToFeiShu 根据会议ID创建报告并推送到飞书
+func PushMeetingReportToFeiShu(meetingID string) error {
+	// 创建会议报告
+	report, err := CreateMeetingReport(meetingID)
+	if err != nil {
+		return fmt.Errorf("创建会议报告失败: %v", err)
+	}
+
+	// 发送报告到飞书
+	if err := SendMeetingReportToFeiShu(report); err != nil {
+		return fmt.Errorf("发送报告到飞书失败: %v", err)
+	}
+
+	return nil
 }

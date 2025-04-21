@@ -23,6 +23,7 @@ func main() {
 	h.GET("/score", handlers.GetMeetingScore)
 	h.GET("/chat", handlers.HandleChat)
 	h.GET("/roleplay", handlers.HandleRolePlayChat)
+	h.GET("/push-report", handlers.PushMeetingReport)
 
 	// 注册待办事项API路由
 	h.POST("/todo", handlers.CreateTodo)       // 创建待办事项
