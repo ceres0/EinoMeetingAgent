@@ -7,14 +7,14 @@ import (
 	"sync"
 )
 
-// Config 结构包含应用程序的所有配置信息
+// Config 应用程序配置信息
 type Config struct {
 	ARK struct {
 		APIKey    string `json:"api_key"`
 		ModelName string `json:"model_name"`
 	} `json:"ark"`
 	FeiShu struct {
-		WebhookURL string `json:"webhook_url"` // 飞书机器人的Webhook地址
+		WebhookURL string `json:"webhook_url"`
 	} `json:"feishu"`
 }
 
@@ -45,7 +45,7 @@ func LoadConfig() (*Config, error) {
 			return
 		}
 
-		// 检查必要的配置是否存在
+		// 检查必要配置
 		if cfg.ARK.APIKey == "" {
 			configErr = fmt.Errorf("ARK API密钥未配置")
 			return

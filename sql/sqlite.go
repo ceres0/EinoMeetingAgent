@@ -10,22 +10,23 @@ import (
 	_ "github.com/glebarez/go-sqlite" // 引入纯Go实现的sqlite驱动
 )
 
-// Todo 表示一个待办事项
+// Todo 待办事项
 type Todo struct {
-	ID          int64     `json:"id"`          // 待办事项ID
-	Title       string    `json:"title"`       // 待办事项标题
-	Description string    `json:"description"` // 待办事项描述
-	Status      string    `json:"status"`      // 待办事项状态（未开始、进行中、已完成）
-	Priority    int       `json:"priority"`    // 优先级（1-高，2-中，3-低）
-	DueDate     time.Time `json:"due_date"`    // 截止日期
-	CreatedAt   time.Time `json:"created_at"`  // 创建时间
-	UpdatedAt   time.Time `json:"updated_at"`  // 更新时间
-	MeetingID   string    `json:"meeting_id"`  // 关联的会议ID
-	AssignedTo  string    `json:"assigned_to"` // 分配给谁
+	ID          int64     `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Status      string    `json:"status"`
+	Priority    int       `json:"priority"`
+	DueDate     time.Time `json:"due_date"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	MeetingID   string    `json:"meeting_id"`
+	AssignedTo  string    `json:"assigned_to"`
 }
 
+// 打开数据库连接
 func openDatabase(dbName string) (*sql.DB, error) {
-	// 检查数据库文件是否存在，如果不存在则创建
+	// 检查数据库文件是否存在
 	if _, err := os.Stat(dbName); os.IsNotExist(err) {
 		fmt.Println("数据库文件不存在，将创建:", dbName)
 
@@ -38,14 +39,14 @@ func openDatabase(dbName string) (*sql.DB, error) {
 		}
 	}
 
-	db, err := sql.Open("sqlite", dbName) // 使用sqlite驱动
+	db, err := sql.Open("sqlite", dbName)
 	if err != nil {
 		return nil, fmt.Errorf("打开数据库失败: %w", err)
 	}
 
-	err = db.Ping() // 尝试连接数据库
+	err = db.Ping()
 	if err != nil {
-		db.Close() // 连接失败时关闭连接
+		db.Close()
 		return nil, fmt.Errorf("连接数据库失败: %w", err)
 	}
 
@@ -92,7 +93,7 @@ func InitTodoTable(dbName string) error {
 	return nil
 }
 
-// AddTodo 添加一个新的待办事项
+// AddTodo 添加新的待办事项
 func AddTodo(dbName string, todo *Todo) (int64, error) {
 	db, err := openDatabase(dbName)
 	if err != nil {
@@ -100,7 +101,7 @@ func AddTodo(dbName string, todo *Todo) (int64, error) {
 	}
 	defer db.Close()
 
-	// 设置创建时间和更新时间为当前时间
+	// 设置创建和更新时间
 	now := time.Now()
 	todo.CreatedAt = now
 	todo.UpdatedAt = now
@@ -138,13 +139,13 @@ func GetTodoByID(dbName string, id int64) (*Todo, error) {
 	}
 	defer db.Close()
 
-	// 使用ListTodos来避免直接查询的问题
+	// 使用ListTodos查找匹配ID的待办事项
 	todos, err := ListTodos(dbName, "", "", 0)
 	if err != nil {
 		return nil, fmt.Errorf("查询待办事项列表失败: %w", err)
 	}
 
-	// 在内存中查找匹配的ID
+	// 查找匹配的ID
 	for _, todo := range todos {
 		if todo.ID == id {
 			return todo, nil
@@ -162,10 +163,10 @@ func UpdateTodo(dbName string, todo *Todo) error {
 	}
 	defer db.Close()
 
-	// 设置更新时间为当前时间
+	// 设置更新时间
 	todo.UpdatedAt = time.Now()
 
-	// 更新数据，使用索引占位符
+	// 更新数据
 	updateSQL := `
 	UPDATE todos
 	SET title = ?1, description = ?2, status = ?3, priority = ?4, due_date = ?5,
@@ -200,7 +201,7 @@ func DeleteTodo(dbName string, id int64) error {
 	}
 	defer db.Close()
 
-	// 删除数据，使用索引占位符
+	// 删除数据
 	deleteSQL := `DELETE FROM todos WHERE id = ?1;`
 
 	result, err := db.Exec(deleteSQL, id)
@@ -220,7 +221,7 @@ func DeleteTodo(dbName string, id int64) error {
 	return nil
 }
 
-// ListTodos 列出所有待办事项，可以根据条件筛选
+// ListTodos 列出待办事项，可按条件筛选
 func ListTodos(dbName string, meetingID string, status string, priority int) ([]*Todo, error) {
 	db, err := openDatabase(dbName)
 	if err != nil {
@@ -228,7 +229,7 @@ func ListTodos(dbName string, meetingID string, status string, priority int) ([]
 	}
 	defer db.Close()
 
-	// 构建查询条件，使用索引占位符
+	// 构建查询条件
 	querySQL := `
 	SELECT id, title, description, status, priority, due_date, 
 	       created_at, updated_at, meeting_id, assigned_to
@@ -279,7 +280,7 @@ func ListTodos(dbName string, meetingID string, status string, priority int) ([]
 			return nil, fmt.Errorf("读取待办事项数据失败: %w", err)
 		}
 
-		// 如果截止日期不为空，则设置到todo结构体中
+		// 处理截止日期
 		if dueDate.Valid {
 			todo.DueDate = dueDate.Time
 		}
@@ -287,7 +288,7 @@ func ListTodos(dbName string, meetingID string, status string, priority int) ([]
 		todos = append(todos, &todo)
 	}
 
-	// 检查遍历过程中是否有错误
+	// 检查遍历错误
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("遍历待办事项数据失败: %w", err)
 	}
@@ -295,7 +296,7 @@ func ListTodos(dbName string, meetingID string, status string, priority int) ([]
 	return todos, nil
 }
 
-// GetTodosByMeetingID 根据会议ID获取相关待办事项
+// GetTodosByMeetingID 根据会议ID获取待办事项
 func GetTodosByMeetingID(dbName string, meetingID string) ([]*Todo, error) {
 	return ListTodos(dbName, meetingID, "", 0)
 }
@@ -324,7 +325,7 @@ func BatchAddTodos(dbName string, todos []*Todo) error {
 		return fmt.Errorf("开始事务失败: %w", err)
 	}
 
-	// 准备插入语句，使用索引占位符
+	// 准备插入语句
 	insertSQL := `
 	INSERT INTO todos (
 		title, description, status, priority, due_date, 
@@ -344,7 +345,7 @@ func BatchAddTodos(dbName string, todos []*Todo) error {
 
 	// 批量执行插入
 	for _, todo := range todos {
-		// 设置创建时间和更新时间
+		// 设置创建和更新时间
 		todo.CreatedAt = now
 		todo.UpdatedAt = now
 

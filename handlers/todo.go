@@ -21,18 +21,18 @@ func init() {
 	}
 }
 
-// TodoRequest 表示创建或更新待办事项的请求体
+// TodoRequest 创建或更新待办事项的请求
 type TodoRequest struct {
-	Title       string    `json:"title"`       // 待办事项标题
-	Description string    `json:"description"` // 待办事项描述
-	Status      string    `json:"status"`      // 待办事项状态
-	Priority    int       `json:"priority"`    // 优先级
-	DueDate     time.Time `json:"due_date"`    // 截止日期
-	MeetingID   string    `json:"meeting_id"`  // 关联的会议ID
-	AssignedTo  string    `json:"assigned_to"` // 分配给谁
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Status      string    `json:"status"`
+	Priority    int       `json:"priority"`
+	DueDate     time.Time `json:"due_date"`
+	MeetingID   string    `json:"meeting_id"`
+	AssignedTo  string    `json:"assigned_to"`
 }
 
-// TodoResponse 表示返回给客户端的待办事项信息
+// TodoResponse 返回给客户端的待办事项信息
 type TodoResponse struct {
 	ID          int64     `json:"id"`
 	Title       string    `json:"title"`
@@ -46,12 +46,12 @@ type TodoResponse struct {
 	AssignedTo  string    `json:"assigned_to"`
 }
 
-// TodosResponse 表示返回给客户端的待办事项列表
+// TodosResponse 返回给客户端的待办事项列表
 type TodosResponse struct {
 	Todos []TodoResponse `json:"todos"`
 }
 
-// CreateTodo 处理创建待办事项的请求
+// CreateTodo 处理创建待办事项请求
 func CreateTodo(ctx context.Context, c *app.RequestContext) {
 	// 解析请求体
 	var req TodoRequest
@@ -96,7 +96,7 @@ func CreateTodo(ctx context.Context, c *app.RequestContext) {
 	})
 }
 
-// GetTodoList 处理获取待办事项列表的请求
+// GetTodoList 处理获取待办事项列表请求
 func GetTodoList(ctx context.Context, c *app.RequestContext) {
 	// 获取查询参数
 	meetingID := c.Query("meeting_id")
@@ -141,7 +141,7 @@ func GetTodoList(ctx context.Context, c *app.RequestContext) {
 	c.JSON(consts.StatusOK, response)
 }
 
-// UpdateTodo 处理更新待办事项的请求
+// UpdateTodo 处理更新待办事项请求
 func UpdateTodo(ctx context.Context, c *app.RequestContext) {
 	// 获取待办事项ID
 	idStr := c.Param("id")
@@ -200,7 +200,7 @@ func UpdateTodo(ctx context.Context, c *app.RequestContext) {
 	})
 }
 
-// DeleteTodo 处理删除待办事项的请求
+// DeleteTodo 处理删除待办事项请求
 func DeleteTodo(ctx context.Context, c *app.RequestContext) {
 	// 获取待办事项ID
 	idStr := c.Param("id")

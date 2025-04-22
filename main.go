@@ -15,7 +15,7 @@ func main() {
 	h := server.Default()
 	h.Use(Logger())
 
-	// Register API routes first
+	// 注册API路由
 	h.POST("/meeting", handlers.CreateMeeting)
 	h.GET("/meeting", handlers.ListMeetings)
 	h.GET("/summary", handlers.GetMeetingSummary)
@@ -25,17 +25,17 @@ func main() {
 	h.GET("/roleplay", handlers.HandleRolePlayChat)
 	h.GET("/push-report", handlers.PushMeetingReport)
 
-	// 注册多角色扮演会议API路由
-	h.POST("/multi-roleplay", handlers.HandleMultiRoleplayMeeting)              // 同步接口
-	h.POST("/multi-roleplay/stream", handlers.HandleStreamMultiRoleplayMeeting) // 流式接口
+	// 注册多角色扮演会议路由
+	h.POST("/multi-roleplay", handlers.HandleMultiRoleplayMeeting)
+	h.POST("/multi-roleplay/stream", handlers.HandleStreamMultiRoleplayMeeting)
 
-	// 注册待办事项API路由
-	h.POST("/todo", handlers.CreateTodo)       // 创建待办事项
-	h.GET("/todo", handlers.GetTodoList)       // 获取待办事项列表
-	h.PUT("/todo/:id", handlers.UpdateTodo)    // 更新待办事项
-	h.DELETE("/todo/:id", handlers.DeleteTodo) // 删除待办事项
+	// 注册待办事项路由
+	h.POST("/todo", handlers.CreateTodo)
+	h.GET("/todo", handlers.GetTodoList)
+	h.PUT("/todo/:id", handlers.UpdateTodo)
+	h.DELETE("/todo/:id", handlers.DeleteTodo)
 
-	// Serve static files
+	// 提供静态文件服务
 	h.StaticFS("/", &app.FS{
 		Root:               "./static",
 		PathRewrite:        app.NewPathSlashesStripper(1),
@@ -43,10 +43,11 @@ func main() {
 		GenerateIndexPages: true,
 	})
 
-	// Start server
+	// 启动服务器
 	h.Spin()
 }
 
+// Logger 请求日志中间件
 func Logger() app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		start := time.Now()
@@ -56,16 +57,16 @@ func Logger() app.HandlerFunc {
 			path = path + "?" + query
 		}
 
-		// Process request
+		// 处理请求
 		ctx.Next(c)
 
-		// Calculate latency
+		// 计算耗时
 		latency := time.Since(start)
 
-		// Get response status code
+		// 获取响应状态码
 		statusCode := ctx.Response.StatusCode()
 
-		// Log request details
+		// 记录请求详情
 		hlog.CtxInfof(c, "[HTTP] %s %s - %d - %v",
 			ctx.Request.Method(),
 			path,
