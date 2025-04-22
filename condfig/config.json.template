@@ -1,9 +1,0 @@
-{
-  "ark": {
-    "api_key": "your_ark_api_key_here",
-    "model_name": "your_ark_model_name_here"
-  },
-  "feishu": {
-    "webhook_url": "your_feishu_webhook_url_here"
-  }
-}
