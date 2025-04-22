@@ -14,3 +14,8 @@ Meeting Agent 是一个用于会议管理的 API 服务，基于 Golang 和 Hert
 - **角色扮演**：支持单角色和多角色扮演会议模式
 - **待办事项**：创建、获取、更新和删除待办事项
 - **报告推送**：支持会议报告推送功能
+
+## 配置文件说明
+
+- 请在 config/config.json.template 中配置 API_KEY、FEISHU_WEBHOOK_URL
+- 配置完成后，将 config/config.json.template 重命名为 config/config.json
