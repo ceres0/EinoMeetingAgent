@@ -18,7 +18,7 @@ import (
 	"github.com/hertz-contrib/sse"
 )
 
-// CreateMeeting handles the creation of a new meeting
+// CreateMeeting 处理创建会议请求
 func CreateMeeting(ctx context.Context, c *app.RequestContext) {
 	var reqBody map[string]interface{}
 	if err := c.BindJSON(&reqBody); err != nil {
@@ -126,7 +126,7 @@ func CreateMeeting(ctx context.Context, c *app.RequestContext) {
 	c.JSON(consts.StatusOK, response)
 }
 
-// ListMeetings handles listing all meetings
+// ListMeetings 处理获取会议列表请求
 func ListMeetings(ctx context.Context, c *app.RequestContext) {
 	storageDir := "./storage/meetings"
 
@@ -205,7 +205,7 @@ func ListMeetings(ctx context.Context, c *app.RequestContext) {
 	c.JSON(consts.StatusOK, response)
 }
 
-// GetMeetingSummary handles retrieving a meeting summary
+// GetMeetingSummary 处理获取会议摘要请求
 func GetMeetingSummary(ctx context.Context, c *app.RequestContext) {
 	meetingID := c.Query("meeting_id")
 	if meetingID == "" {
@@ -262,7 +262,7 @@ func GetMeetingSummary(ctx context.Context, c *app.RequestContext) {
 	c.JSON(consts.StatusOK, response)
 }
 
-// HandleChat handles the SSE chat session
+// HandleChat 处理SSE聊天会话
 func HandleChat(ctx context.Context, c *app.RequestContext) {
 	meetingID := c.Query("meeting_id")
 	sessionID := c.Query("session_id")
@@ -400,7 +400,7 @@ func HandleChat(ctx context.Context, c *app.RequestContext) {
 	}
 }
 
-// GetMeetingMermaid 处理获取会议流程图的请求
+// GetMeetingMermaid 处理获取会议流程图请求
 func GetMeetingMermaid(ctx context.Context, c *app.RequestContext) {
 	meetingID := c.Query("meeting_id")
 	if meetingID == "" {
@@ -596,7 +596,7 @@ func HandleRolePlayChat(ctx context.Context, c *app.RequestContext) {
 	}
 }
 
-// GetMeetingScore 处理获取会议评分的请求
+// GetMeetingScore 处理获取会议评分请求
 func GetMeetingScore(ctx context.Context, c *app.RequestContext) {
 	meetingID := c.Query("meeting_id")
 	if meetingID == "" {

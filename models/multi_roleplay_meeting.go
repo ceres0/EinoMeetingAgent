@@ -15,43 +15,44 @@ import (
 	"github.com/hertz-contrib/sse"
 )
 
-// MultiRoleplayRequest 表示多角色扮演会议的请求
+// MultiRoleplayRequest 多角色扮演会议请求
 type MultiRoleplayRequest struct {
-	MeetingID   string   `json:"meeting_id"`  // 会议ID
-	Host        string   `json:"host"`        // 主持人
-	Specialists []string `json:"specialists"` // 专家参与者
-	Rounds      int      `json:"rounds"`      // 讨论轮数
-	Topic       string   `json:"topic"`       // 讨论主题（可选）
+	MeetingID   string   `json:"meeting_id"`
+	Host        string   `json:"host"`
+	Specialists []string `json:"specialists"`
+	Rounds      int      `json:"rounds"`
+	Topic       string   `json:"topic"`
 }
 
-// DiscussionMessage 表示多角色扮演过程中的消息
+// DiscussionMessage 讨论消息
 type DiscussionMessage struct {
-	Role     string `json:"role"`      // 角色（主持人或专家名称）
-	Content  string `json:"content"`   // 消息内容
-	IsSystem bool   `json:"is_system"` // 是否是系统消息
+	Role     string `json:"role"`
+	Content  string `json:"content"`
+	IsSystem bool   `json:"is_system"`
 }
 
-// MultiRoleplayResponse 表示多角色扮演会议的响应
+// MultiRoleplayResponse 多角色扮演会议响应
 type MultiRoleplayResponse struct {
-	Messages []DiscussionMessage `json:"messages"` // 所有讨论消息
-	Summary  string              `json:"summary"`  // 讨论总结
+	Messages []DiscussionMessage `json:"messages"`
+	Summary  string              `json:"summary"`
 }
 
-// LogCallbackHandler 用于记录agent的消息
+// LogCallbackHandler 记录agent消息的处理器
 type LogCallbackHandler struct {
 	Messages     []DiscussionMessage
 	messagesLock sync.Mutex
 	Stream       *sse.Stream
-	AgentNameMap map[string]string // 添加角色名映射，记录每个角色的实际名称
+	AgentNameMap map[string]string
 }
 
+// OnAgentMessage 处理Agent消息回调
 func (h *LogCallbackHandler) OnAgentMessage(_ context.Context, msg *schema.Message) error {
 	content := msg.Content
 
 	h.messagesLock.Lock()
 	defer h.messagesLock.Unlock()
 
-	// 获取角色的实际名称
+	// 获取角色实际名称
 	roleName := string(msg.Role)
 	if actualName, exists := h.AgentNameMap[roleName]; exists && msg.Role != schema.System {
 		roleName = actualName
@@ -65,7 +66,7 @@ func (h *LogCallbackHandler) OnAgentMessage(_ context.Context, msg *schema.Messa
 	}
 	h.Messages = append(h.Messages, message)
 
-	// 如果有Stream，发送SSE事件
+	// 发送SSE事件
 	if h.Stream != nil {
 		jsonData, err := json.Marshal(message)
 		if err != nil {
@@ -84,6 +85,7 @@ func (h *LogCallbackHandler) OnAgentMessage(_ context.Context, msg *schema.Messa
 	return nil
 }
 
+// OnAgentHandoff 处理Agent切换回调
 func (h *LogCallbackHandler) OnAgentHandoff(_ context.Context, reason string, targetAgent string) error {
 	message := DiscussionMessage{
 		Role:     "系统",
@@ -95,7 +97,7 @@ func (h *LogCallbackHandler) OnAgentHandoff(_ context.Context, reason string, ta
 	defer h.messagesLock.Unlock()
 	h.Messages = append(h.Messages, message)
 
-	// 如果有Stream，发送SSE事件
+	// 发送SSE事件
 	if h.Stream != nil {
 		jsonData, err := json.Marshal(message)
 		if err != nil {
@@ -114,27 +116,27 @@ func (h *LogCallbackHandler) OnAgentHandoff(_ context.Context, reason string, ta
 	return nil
 }
 
-// Host 表示主持人代理
+// Host 主持人代理
 type Host struct {
-	ChatModel    *ark.ChatModel // 直接使用具体实现
+	ChatModel    *ark.ChatModel
 	SystemPrompt string
-	Name         string // 添加名称字段
+	Name         string
 }
 
-// Specialist 表示专家代理
+// Specialist 专家代理
 type Specialist struct {
 	Name         string
-	ChatModel    *ark.ChatModel // 直接使用具体实现，避免函数嵌套导致的问题
-	SystemPrompt string         // 添加系统提示字段
+	ChatModel    *ark.ChatModel
+	SystemPrompt string
 }
 
-// MultiAgent 表示多代理系统
+// MultiAgent 多代理系统
 type MultiAgent struct {
 	Host        Host
 	Specialists []Specialist
 }
 
-// 创建新的多代理系统
+// NewMultiAgent 创建新的多代理系统
 func NewMultiAgent(host Host, specialists []Specialist) *MultiAgent {
 	return &MultiAgent{
 		Host:        host,
@@ -144,13 +146,13 @@ func NewMultiAgent(host Host, specialists []Specialist) *MultiAgent {
 
 // Stream 流式返回多代理系统的回答
 func (ma *MultiAgent) Stream(ctx context.Context, messages []*schema.Message, cb *LogCallbackHandler) (io.ReadCloser, error) {
-	// 创建一个管道用于流式返回
+	// 创建管道用于流式返回
 	pr, pw := io.Pipe()
 
 	go func() {
 		defer pw.Close()
 
-		// 先让主持人发言
+		// 主持人发言
 		hostMessages := append([]*schema.Message{
 			schema.SystemMessage(ma.Host.SystemPrompt),
 		}, messages...)
@@ -161,70 +163,67 @@ func (ma *MultiAgent) Stream(ctx context.Context, messages []*schema.Message, cb
 			return
 		}
 
-		// 创建主持人消息，使用主持人实际名称
+		// 创建主持人消息
 		hostMsg := &schema.Message{
 			Role:    schema.Assistant,
 			Content: hostResp.Content,
 		}
 
-		// 设置回调中的角色映射
+		// 设置角色映射
 		cb.AgentNameMap[string(schema.Assistant)] = ma.Host.Name
 
 		// 记录主持人消息
 		cb.OnAgentMessage(ctx, hostMsg)
 
-		// 更新消息列表，将主持人的回复添加到上下文中
+		// 更新消息列表
 		currentContext := append(messages, hostMsg)
 
-		// 让每个专家依次发言
+		// 专家依次发言
 		for _, specialist := range ma.Specialists {
 			// 通知切换到专家
 			cb.OnAgentHandoff(ctx, "轮到专家发言", specialist.Name)
 
-			// 为专家创建定制消息，包含被点名的提示
+			// 专家提示
 			specialistPrompt := fmt.Sprintf("主持人%s邀请你(%s)发表意见。请根据主持人的提问，分享你的看法。",
 				ma.Host.Name, specialist.Name)
 
-			// 创建专家的消息上下文
+			// 创建专家消息上下文
 			specialistMessages := []*schema.Message{
 				schema.SystemMessage(specialist.SystemPrompt),
 			}
 
-			// 添加之前的对话历史
+			// 添加对话历史
 			specialistMessages = append(specialistMessages, currentContext...)
 
 			// 添加点名提示
 			specialistMessages = append(specialistMessages,
 				schema.UserMessage(specialistPrompt))
 
-			// 设置当前专家的角色映射
+			// 设置当前专家角色映射
 			cb.AgentNameMap[string(schema.Assistant)] = specialist.Name
 
-			// 调用专家的聊天模型生成回复
+			// 生成专家回复
 			specialistResp, err := specialist.ChatModel.Generate(ctx, specialistMessages)
 			if err != nil {
-				// 报错但继续处理其他专家
 				errMsg := fmt.Sprintf("专家%s回复失败: %v", specialist.Name, err)
 				fmt.Fprintf(pw, errMsg)
 
-				// 创建一个空回复，以保持流程完整
 				specialistMsg := &schema.Message{
 					Role:    schema.Assistant,
 					Content: "（因技术原因，暂未收到回复）",
 				}
 
-				// 记录错误消息
 				cb.OnAgentMessage(ctx, specialistMsg)
 				continue
 			}
 
-			// 确保专家回复不为空
+			// 确保回复不为空
 			content := specialistResp.Content
 			if strings.TrimSpace(content) == "" {
 				content = fmt.Sprintf("（%s表示暂时没有补充意见）", specialist.Name)
 			}
 
-			// 创建专家消息，使用专家实际名称
+			// 创建专家消息
 			specialistMsg := &schema.Message{
 				Role:    schema.Assistant,
 				Content: content,
@@ -233,10 +232,10 @@ func (ma *MultiAgent) Stream(ctx context.Context, messages []*schema.Message, cb
 			// 记录专家消息
 			cb.OnAgentMessage(ctx, specialistMsg)
 
-			// 将专家消息添加到当前上下文
+			// 添加到当前上下文
 			currentContext = append(currentContext,
 				&schema.Message{
-					Role:    schema.User, // 作为用户消息提供给下一个专家
+					Role:    schema.User,
 					Content: fmt.Sprintf("%s: %s", specialist.Name, content),
 				})
 		}
@@ -257,10 +256,10 @@ func ProcessMultiRoleplayMeeting(ctx context.Context, req *MultiRoleplayRequest,
 	cb := &LogCallbackHandler{
 		Messages:     []DiscussionMessage{},
 		Stream:       stream,
-		AgentNameMap: make(map[string]string), // 初始化角色名映射
+		AgentNameMap: make(map[string]string),
 	}
 
-	// 添加系统消息-会议开始
+	// 会议开始系统消息
 	startMsg := DiscussionMessage{
 		Role:     "系统",
 		Content:  "【会议扩展讨论开始】",
@@ -282,7 +281,7 @@ func ProcessMultiRoleplayMeeting(ctx context.Context, req *MultiRoleplayRequest,
 		return nil, fmt.Errorf("创建主持人代理失败: %v", err)
 	}
 
-	// 创建专家代理列表
+	// 创建专家代理
 	specialists := make([]Specialist, 0, len(req.Specialists))
 	for _, name := range req.Specialists {
 		specialist, err := newSpecialist(ctx, name, meetingContent, meetingInfo, req.Host)
@@ -295,15 +294,15 @@ func ProcessMultiRoleplayMeeting(ctx context.Context, req *MultiRoleplayRequest,
 	// 创建多代理
 	multiAgent := NewMultiAgent(*hostAgent, specialists)
 
-	// 构建讨论历史
+	// 讨论历史
 	discussionHistory := []*schema.Message{}
 
-	// 进行指定轮数的对话
+	// 进行指定轮数对话
 	for round := 0; round < req.Rounds; round++ {
-		// 构建主持人的指导消息
+		// 构建主持人指导消息
 		var hostPrompt string
 		if round == 0 {
-			// 第一轮：介绍讨论主题并点名专家
+			// 第一轮
 			specialistsNames := strings.Join(req.Specialists, "、")
 			if req.Topic != "" {
 				hostPrompt = fmt.Sprintf("作为会议主持人，现在请你引导参会者们讨论以下主题：%s。在你的发言中，必须逐个点名邀请每位参会者（%s）发表意见。你的发言应该自然、富有引导性，并确保所有人都能参与讨论。", req.Topic, specialistsNames)
@@ -311,7 +310,7 @@ func ProcessMultiRoleplayMeeting(ctx context.Context, req *MultiRoleplayRequest,
 				hostPrompt = fmt.Sprintf("作为会议主持人，请引导参会者们深入讨论会议中的重要议题。在你的发言中，必须逐个点名邀请每位参会者（%s）发表意见。你的发言应该自然、富有引导性，确保所有人都能参与讨论。", specialistsNames)
 			}
 		} else {
-			// 后续轮次：总结前面的观点并继续讨论
+			// 后续轮次
 			specialistsNames := strings.Join(req.Specialists, "、")
 			hostPrompt = fmt.Sprintf("作为会议主持人，请对当前讨论进行简短总结，并继续引导讨论。在你的发言中，必须点名邀请每位参会者（%s）对讨论主题发表进一步的看法。确保所有人都能充分参与讨论，特别是那些之前发言不多的人。", specialistsNames)
 		}
@@ -322,25 +321,23 @@ func ProcessMultiRoleplayMeeting(ctx context.Context, req *MultiRoleplayRequest,
 			schema.UserMessage(hostPrompt),
 		}
 
-		// 添加讨论历史作为上下文
+		// 添加讨论历史
 		roundMessages = append(roundMessages, discussionHistory...)
 
-		// 使用流式生成回答
+		// 流式生成回答
 		out, err := multiAgent.Stream(ctx, roundMessages, cb)
 		if err != nil {
 			return nil, fmt.Errorf("第%d轮对话生成失败: %v", round+1, err)
 		}
 
-		// 读取输出但不处理，因为已经在回调中处理了
 		io.Copy(io.Discard, out)
 		out.Close()
 
-		// 如果已经是最后一轮，不需要继续
 		if round == req.Rounds-1 {
 			break
 		}
 
-		// 收集本轮的消息作为下一轮的历史记录
+		// 收集本轮消息
 		discussionHistory = collectRoundMessages(cb.Messages, req.Host, req.Specialists)
 	}
 
@@ -372,12 +369,11 @@ func ProcessMultiRoleplayMeeting(ctx context.Context, req *MultiRoleplayRequest,
 	}, nil
 }
 
-// collectRoundMessages 收集本轮的消息，转换为下一轮的上下文
+// collectRoundMessages 收集本轮消息，转换为下一轮上下文
 func collectRoundMessages(messages []DiscussionMessage, hostName string, specialistNames []string) []*schema.Message {
 	var result []*schema.Message
 
-	// 计算当前轮次的消息开始位置
-	// 找到最后一个总结/开始消息的位置
+	// 计算当前轮次开始位置
 	startPos := 0
 	for i, msg := range messages {
 		if msg.IsSystem {
@@ -385,7 +381,7 @@ func collectRoundMessages(messages []DiscussionMessage, hostName string, special
 		}
 	}
 
-	// 收集从startPos开始的所有非系统消息
+	// 收集非系统消息
 	for i := startPos; i < len(messages); i++ {
 		msg := messages[i]
 		if !msg.IsSystem {
@@ -408,22 +404,20 @@ func collectRoundMessages(messages []DiscussionMessage, hostName string, special
 
 // getMeetingContent 获取会议内容和元数据
 func getMeetingContent(meetingID string) (string, string, error) {
-	// 读取对应会议文件内容
+	// 读取会议文件
 	storageDir := "./storage/meetings"
 	filePath := filepath.Join(storageDir, meetingID+".json")
 
-	// 检查文件是否存在
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return "", "", fmt.Errorf("会议不存在")
 	}
 
-	// 读取会议文件
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", "", fmt.Errorf("无法读取会议信息: %v", err)
 	}
 
-	// 解析JSON内容
+	// 解析JSON
 	var meetingData map[string]interface{}
 	if err := json.Unmarshal(data, &meetingData); err != nil {
 		return "", "", fmt.Errorf("无法解析会议数据: %v", err)
@@ -432,36 +426,27 @@ func getMeetingContent(meetingID string) (string, string, error) {
 	// 提取会议内容
 	var meetingContent string
 
-	// 尝试从新格式中获取原始内容
 	if rawContent, ok := meetingData["raw_content"].(string); ok {
 		meetingContent = rawContent
+	} else if content, ok := meetingData["content"].(string); ok {
+		meetingContent = content
 	} else {
-		// 尝试获取content字段
-		if content, ok := meetingData["content"].(string); ok {
-			meetingContent = content
-		} else {
-			// 如果没有找到适合的字段，将整个JSON作为内容
-			contentBytes, _ := json.MarshalIndent(meetingData, "", "  ")
-			meetingContent = string(contentBytes)
-		}
+		contentBytes, _ := json.MarshalIndent(meetingData, "", "  ")
+		meetingContent = string(contentBytes)
 	}
 
 	// 提取会议元数据
 	meetingInfo := "会议信息:\n"
 
-	// 尝试从新格式中获取元数据
 	if metadata, ok := meetingData["metadata"].(map[string]interface{}); ok {
-		// 添加标题
 		if title, ok := metadata["title"].(string); ok && title != "" {
 			meetingInfo += "标题: " + title + "\n"
 		}
 
-		// 添加描述
 		if description, ok := metadata["description"].(string); ok && description != "" {
 			meetingInfo += "描述: " + description + "\n"
 		}
 
-		// 添加参会人员
 		if participants, ok := metadata["participants"].([]interface{}); ok && len(participants) > 0 {
 			meetingInfo += "参会人员: "
 			for i, p := range participants {
@@ -475,7 +460,6 @@ func getMeetingContent(meetingID string) (string, string, error) {
 			meetingInfo += "\n"
 		}
 
-		// 添加时间信息
 		if startTime, ok := metadata["start_time"].(string); ok && startTime != "" {
 			meetingInfo += "开始时间: " + startTime + "\n"
 		}
@@ -483,7 +467,6 @@ func getMeetingContent(meetingID string) (string, string, error) {
 			meetingInfo += "结束时间: " + endTime + "\n"
 		}
 
-		// 添加摘要
 		if summary, ok := metadata["summary"].(string); ok && summary != "" {
 			meetingInfo += "摘要: " + summary + "\n"
 		}
@@ -494,7 +477,7 @@ func getMeetingContent(meetingID string) (string, string, error) {
 
 // newHost 创建主持人代理
 func newHost(ctx context.Context, hostName string, meetingContent string, meetingInfo string, specialists []string) (*Host, error) {
-	// 获取API密钥和模型名称
+	// 获取API配置
 	arkAPIKey, err := GetARKAPIKey()
 	if err != nil {
 		return nil, fmt.Errorf("获取API密钥失败: %v", err)
@@ -515,10 +498,10 @@ func newHost(ctx context.Context, hostName string, meetingContent string, meetin
 		return nil, fmt.Errorf("创建聊天模型失败: %v", err)
 	}
 
-	// 列出所有参会者
+	// 参会者列表
 	participantsStr := strings.Join(specialists, "、")
 
-	// 构建系统提示
+	// 系统提示
 	systemPrompt := fmt.Sprintf(`你是会议主持人%s，负责引导和管理会议讨论。
 
 会议背景信息:
@@ -539,17 +522,16 @@ func newHost(ctx context.Context, hostName string, meetingContent string, meetin
 注意：你必须在每次发言中，明确提及并邀请所有参会者（%s）各自发表意见。这是你的首要任务。`,
 		hostName, meetingInfo, meetingContent, participantsStr, participantsStr)
 
-	// 创建并返回主持人代理
 	return &Host{
 		ChatModel:    chatModel,
 		SystemPrompt: systemPrompt,
-		Name:         hostName, // 设置主持人名称
+		Name:         hostName,
 	}, nil
 }
 
 // newSpecialist 创建专家参会者代理
 func newSpecialist(ctx context.Context, specialistName string, meetingContent string, meetingInfo string, hostName string) (Specialist, error) {
-	// 获取API密钥和模型名称
+	// 获取API配置
 	arkAPIKey, err := GetARKAPIKey()
 	if err != nil {
 		return Specialist{}, fmt.Errorf("获取API密钥失败: %v", err)
@@ -560,7 +542,7 @@ func newSpecialist(ctx context.Context, specialistName string, meetingContent st
 		return Specialist{}, fmt.Errorf("获取模型名称失败: %v", err)
 	}
 
-	// 创建代理的系统提示
+	// 创建代理系统提示
 	systemPrompt := fmt.Sprintf(`你是会议参会者%s，在会议中扮演你自己的角色。
 
 会议背景信息:
@@ -592,7 +574,6 @@ func newSpecialist(ctx context.Context, specialistName string, meetingContent st
 		return Specialist{}, fmt.Errorf("创建聊天模型失败: %v", err)
 	}
 
-	// 创建并返回专家代理
 	return Specialist{
 		Name:         specialistName,
 		ChatModel:    chatModel,
@@ -602,7 +583,7 @@ func newSpecialist(ctx context.Context, specialistName string, meetingContent st
 
 // generateDiscussionSummary 生成讨论总结
 func generateDiscussionSummary(ctx context.Context, messages []DiscussionMessage, meetingInfo string) (string, error) {
-	// 获取API密钥和模型名称
+	// 获取API配置
 	arkAPIKey, err := GetARKAPIKey()
 	if err != nil {
 		return "", fmt.Errorf("获取API密钥失败: %v", err)
@@ -623,7 +604,7 @@ func generateDiscussionSummary(ctx context.Context, messages []DiscussionMessage
 		return "", fmt.Errorf("创建聊天模型失败: %v", err)
 	}
 
-	// 提取讨论内容，过滤系统消息
+	// 提取讨论内容
 	var discussionContent strings.Builder
 	discussionContent.WriteString("会议背景信息:\n")
 	discussionContent.WriteString(meetingInfo)
@@ -635,7 +616,7 @@ func generateDiscussionSummary(ctx context.Context, messages []DiscussionMessage
 		}
 	}
 
-	// 准备系统提示和用户提示
+	// 系统提示
 	systemPrompt := `作为专业会议纪要专家，请对提供的会议讨论内容进行总结。总结应包括：
 1. 讨论的主要话题和议题
 2. 各方观点的概述
