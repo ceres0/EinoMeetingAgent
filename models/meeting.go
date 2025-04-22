@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/cloudwego/eino-ext/components/model/ark"
 	"github.com/cloudwego/eino/schema"
@@ -35,6 +36,58 @@ type GetMeetingsResponse struct {
 // ChatMessage represents a chat message in the SSE stream
 type ChatMessage struct {
 	Data string `json:"data"`
+}
+
+// ChatHistoryItem 表示一条聊天历史记录
+type ChatHistoryItem struct {
+	Role    string `json:"role"`    // 角色: user 或 assistant
+	Content string `json:"content"` // 消息内容
+}
+
+// ChatHistory 表示一个会话的聊天历史
+type ChatHistory struct {
+	Items []ChatHistoryItem `json:"items"` // 聊天历史记录
+}
+
+// 全局变量，存储所有会话的历史记录
+var (
+	chatHistories      = make(map[string]*ChatHistory) // 键为 "meetingID:sessionID"
+	chatHistoriesMutex sync.RWMutex                    // 用于保护 chatHistories 的互斥锁
+)
+
+// 获取聊天历史的键
+func getChatHistoryKey(meetingID, sessionID string) string {
+	return fmt.Sprintf("%s:%s", meetingID, sessionID)
+}
+
+// 获取聊天历史，如果不存在则创建
+func getChatHistory(meetingID, sessionID string) *ChatHistory {
+	key := getChatHistoryKey(meetingID, sessionID)
+
+	chatHistoriesMutex.RLock()
+	history, exists := chatHistories[key]
+	chatHistoriesMutex.RUnlock()
+
+	if !exists {
+		history = &ChatHistory{Items: []ChatHistoryItem{}}
+		chatHistoriesMutex.Lock()
+		chatHistories[key] = history
+		chatHistoriesMutex.Unlock()
+	}
+
+	return history
+}
+
+// 添加消息到聊天历史
+func addToChatHistory(meetingID, sessionID, role, content string) {
+	history := getChatHistory(meetingID, sessionID)
+
+	chatHistoriesMutex.Lock()
+	history.Items = append(history.Items, ChatHistoryItem{
+		Role:    role,
+		Content: content,
+	})
+	chatHistoriesMutex.Unlock()
 }
 
 // RolePlayMessage 表示角色扮演聊天消息
@@ -126,7 +179,7 @@ func Of[T any](v T) *T {
 }
 
 // Process handles the chat message and returns streaming response to the SSE stream
-func (c ChatMessage) Process(query string, stream *sse.Stream) error {
+func (c ChatMessage) Process(query string, stream *sse.Stream, meetingID, sessionID string) error {
 	// 从配置文件中获取API密钥和模型名称
 	arkAPIKey, err := GetARKAPIKey()
 	if err != nil {
@@ -160,16 +213,38 @@ func (c ChatMessage) Process(query string, stream *sse.Stream) error {
 		return stream.Publish(event)
 	}
 
-	// 拼接c.Data和query作为prompt
-	prompt := c.Data
-	if query != "" {
-		prompt = prompt + "\n用户问题: " + query
-	}
+	// 获取聊天历史
+	history := getChatHistory(meetingID, sessionID)
+
+	// 将用户当前问题添加到聊天历史
+	addToChatHistory(meetingID, sessionID, "user", query)
 
 	// 准备消息
 	messages := []*schema.Message{
 		schema.SystemMessage("你是一个会议助手，负责回答用户关于会议内容的问题。"),
-		schema.UserMessage(prompt),
+	}
+
+	// 添加会议内容作为背景信息
+	messages = append(messages, schema.UserMessage("以下是会议内容，你需要根据这些内容回答用户问题：\n"+c.Data))
+
+	// 添加历史对话记录
+	chatHistoriesMutex.RLock()
+	historyItems := history.Items
+	chatHistoriesMutex.RUnlock()
+
+	// 最多使用最近的10条历史记录，防止上下文过长
+	startIdx := 0
+	if len(historyItems) > 10 {
+		startIdx = len(historyItems) - 10
+	}
+
+	for i := startIdx; i < len(historyItems); i++ {
+		item := historyItems[i]
+		if item.Role == "user" {
+			messages = append(messages, schema.UserMessage(item.Content))
+		} else {
+			messages = append(messages, schema.AssistantMessage(item.Content, nil))
+		}
 	}
 
 	// 使用流式生成回答
@@ -205,6 +280,9 @@ func (c ChatMessage) Process(query string, stream *sse.Stream) error {
 			return err
 		}
 	}
+
+	// 将AI回答添加到聊天历史
+	addToChatHistory(meetingID, sessionID, "assistant", fullResponse.String())
 
 	return nil
 }
