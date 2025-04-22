@@ -394,7 +394,7 @@ func HandleChat(ctx context.Context, c *app.RequestContext) {
 	chatMsg := models.ChatMessage{
 		Data: msg,
 	}
-	if err := chatMsg.Process(message, stream); err != nil {
+	if err := chatMsg.Process(message, stream, meetingID, sessionID); err != nil {
 		c.AbortWithStatus(consts.StatusInternalServerError)
 		return
 	}
